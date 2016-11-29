@@ -31,12 +31,12 @@ public class Renderer: NSObject, MTKViewDelegate {
     
     func initializeMetalObjects() {
         device = MTLCreateSystemDefaultDevice()
-        commandQueue = device.newCommandQueue()
-        view.depthStencilPixelFormat = MTLPixelFormat.depth32Float_Stencil8
+        commandQueue = device.makeCommandQueue()
+        view.depthStencilPixelFormat = MTLPixelFormat.depth32Float_stencil8
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.depthCompareFunction = MTLCompareFunction.less
         descriptor.isDepthWriteEnabled = true
-        depthStencilState = device.newDepthStencilState(with: descriptor)
+        depthStencilState = device.makeDepthStencilState(descriptor: descriptor)
     }
     
     func createMatrixAndBuffers() {
@@ -49,7 +49,7 @@ public class Renderer: NSObject, MTKViewDelegate {
         let aspect = Float(view.drawableSize.width / view.drawableSize.height)
         let projMatrix = projectionMatrix(0.1, far: 100, aspect: aspect, fovy: 1)
         let modelViewProjectionMatrix = matrix_multiply(projMatrix, matrix_multiply(viewMatrix, modelMatrix))
-        uniformsBuffer = device!.newBuffer(withLength: MemoryLayout<matrix_float4x4>.size, options: [])
+        uniformsBuffer = device!.makeBuffer(length: MemoryLayout<matrix_float4x4>.size, options: [])
         guard let uniformsBuffer = uniformsBuffer else {
             fatalError("Buffer cannot be created.")
         }
@@ -63,20 +63,20 @@ public class Renderer: NSObject, MTKViewDelegate {
         }
         do {
             let input = try String(contentsOfFile: path, encoding: String.Encoding.utf8)
-            library = try device.newLibrary(withSource: input, options: MTLCompileOptions.init())
+            library = try device.makeLibrary(source: input, options: MTLCompileOptions.init())
         }
         catch let error {
             fatalError("\(error)")
         }
-        let vert_func = library.newFunction(withName: "vertex_func")
-        let frag_func = library.newFunction(withName: "fragment_func")
+        let vert_func = library.makeFunction(name: "vertex_func")
+        let frag_func = library.makeFunction(name: "fragment_func")
         
 // step 1: set up the render pipeline state
         
         vertexDescriptor.attributes[0].offset = 0
         vertexDescriptor.attributes[0].format = MTLVertexFormat.float3 // position
         vertexDescriptor.attributes[1].offset = 12
-        vertexDescriptor.attributes[1].format = MTLVertexFormat.uChar4 // color
+        vertexDescriptor.attributes[1].format = MTLVertexFormat.uchar4 // color
         vertexDescriptor.attributes[2].offset = 16
         vertexDescriptor.attributes[2].format = MTLVertexFormat.half2 // texture
         vertexDescriptor.attributes[3].offset = 20
@@ -90,7 +90,7 @@ public class Renderer: NSObject, MTKViewDelegate {
         renderPipelineDescriptor.depthAttachmentPixelFormat = view.depthStencilPixelFormat
         renderPipelineDescriptor.stencilAttachmentPixelFormat = view.depthStencilPixelFormat
         do {
-            renderPipelineState = try device!.newRenderPipelineState(with: renderPipelineDescriptor)
+            renderPipelineState = try device!.makeRenderPipelineState(descriptor: renderPipelineDescriptor)
         }
         catch let error {
             fatalError("\(error)")
@@ -154,8 +154,8 @@ public class Renderer: NSObject, MTKViewDelegate {
         descriptor.colorAttachments[0].texture = drawable.texture
         descriptor.colorAttachments[0].loadAction = .clear
         descriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.5, 0.5, 0.5, 1)
-        let commandBuffer = commandQueue!.commandBuffer()
-        let commandEncoder = commandBuffer.renderCommandEncoder(with: descriptor)
+        let commandBuffer = commandQueue!.makeCommandBuffer()
+        let commandEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor)
         commandEncoder.setRenderPipelineState(renderPipelineState!)
         commandEncoder.setDepthStencilState(depthStencilState)
         commandEncoder.setCullMode(.back)
@@ -173,7 +173,7 @@ public class Renderer: NSObject, MTKViewDelegate {
         guard let submesh = mesh.submeshes.first else {
             fatalError("Submesh not found.")
         }
-        commandEncoder.drawIndexedPrimitives(submesh.primitiveType, indexCount: submesh.indexCount, indexType: submesh.indexType, indexBuffer: submesh.indexBuffer.buffer, indexBufferOffset: submesh.indexBuffer.offset)
+        commandEncoder.drawIndexedPrimitives(type: submesh.primitiveType, indexCount: submesh.indexCount, indexType: submesh.indexType, indexBuffer: submesh.indexBuffer.buffer, indexBufferOffset: submesh.indexBuffer.offset)
         
         commandEncoder.endEncoding()
         commandBuffer.present(drawable)
